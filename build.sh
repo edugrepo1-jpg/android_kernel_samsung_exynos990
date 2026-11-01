@@ -57,19 +57,26 @@ CORES=`cat /proc/cpuinfo | grep -c processor`
 CLANG_DIR=$PWD/toolchain/clang_14
 PATH=$CLANG_DIR/bin:$PATH
 
-# Check if toolchain exists
-if [ ! -f "$CLANG_DIR/bin/clang-14" ]; then
+# Require the clang executable AND its runtime library: an interrupted download
+# can leave a clang-14 launcher that cannot actually run. Do not rely on curl -J
+# choosing the same archive name as our extraction command.
+if [ ! -x "$CLANG_DIR/bin/clang-14" ] || \
+        [ ! -f "$CLANG_DIR/lib64/libc++.so.1" ]; then
     echo "-----------------------------------------------"
-    echo "Toolchain not found! Downloading..."
+    echo "Toolchain missing or incomplete. Preparing staged extraction..."
     echo "-----------------------------------------------"
-    rm -rf $CLANG_DIR
-    mkdir -p $CLANG_DIR
-    pushd $CLANG_DIR > /dev/null
-    curl -LJOk https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-13.0.0_r13/clang-r450784d.tar.gz
-    tar xf android-13.0.0_r13-clang-r450784d.tar.gz
-    rm android-13.0.0_r13-clang-r450784d.tar.gz
-    echo "Cleaning up..."
-    popd > /dev/null
+    TOOLCHAIN_STAGING="${CLANG_DIR}.staging.$"
+    mkdir -p "$TOOLCHAIN_STAGING" || abort
+    curl --fail --location --retry 3 --output "$TOOLCHAIN_STAGING/clang-r450784d.tar.gz" \
+        "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-13.0.0_r13/clang-r450784d.tar.gz" || abort
+    tar -xf "$TOOLCHAIN_STAGING/clang-r450784d.tar.gz" -C "$TOOLCHAIN_STAGING" || abort
+    [ -x "$TOOLCHAIN_STAGING/bin/clang-14" ] || abort
+    [ -f "$TOOLCHAIN_STAGING/lib64/libc++.so.1" ] || abort
+    rm -f "$TOOLCHAIN_STAGING/clang-r450784d.tar.gz"
+    if [ -d "$CLANG_DIR" ]; then
+        mv "$CLANG_DIR" "${CLANG_DIR}.incomplete.$(date +%Y%m%d%H%M%S)" || abort
+    fi
+    mv "$TOOLCHAIN_STAGING" "$CLANG_DIR" || abort
 fi
 
 MAKE_ARGS="
