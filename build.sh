@@ -65,7 +65,7 @@ if [ ! -x "$CLANG_DIR/bin/clang-14" ] || \
     echo "-----------------------------------------------"
     echo "Toolchain missing or incomplete. Preparing staged extraction..."
     echo "-----------------------------------------------"
-    TOOLCHAIN_STAGING="${CLANG_DIR}.staging.$"
+    TOOLCHAIN_STAGING="${CLANG_DIR}.staging.$$"
     mkdir -p "$TOOLCHAIN_STAGING" || abort
     curl --fail --location --retry 3 --output "$TOOLCHAIN_STAGING/clang-r450784d.tar.gz" \
         "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-13.0.0_r13/clang-r450784d.tar.gz" || abort
