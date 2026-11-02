@@ -175,10 +175,10 @@
 				battery,sleep_mode_limit_current = <800>;
 				battery,wc_full_input_limit_current = <100>;
 
-				battery,mix_high_temp = <420>;
+				battery,mix_high_temp = <450>;
 				battery,mix_high_chg_temp = <500>;
 				battery,mix_high_dc_temp = <580>;
-				battery,mix_high_temp_recovery = <390>;
+				battery,mix_high_temp_recovery = <420>;
 
 				/* SEC_BATTERY_FULL_CONDITION_NOTIMEFULL | SEC_BATTERY_FULL_CONDITION_VCELL */
 				battery,full_condition_type = <9>;
