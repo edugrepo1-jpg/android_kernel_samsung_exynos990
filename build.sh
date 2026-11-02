@@ -57,27 +57,9 @@ CORES=`cat /proc/cpuinfo | grep -c processor`
 CLANG_DIR=$PWD/toolchain/clang_14
 PATH=$CLANG_DIR/bin:$PATH
 
-# Require the clang executable AND its runtime library: an interrupted download
-# can leave a clang-14 launcher that cannot actually run. Do not rely on curl -J
-# choosing the same archive name as our extraction command.
-if [ ! -x "$CLANG_DIR/bin/clang-14" ] || \
-        [ ! -f "$CLANG_DIR/lib64/libc++.so.1" ]; then
-    echo "-----------------------------------------------"
-    echo "Toolchain missing or incomplete. Preparing staged extraction..."
-    echo "-----------------------------------------------"
-    TOOLCHAIN_STAGING="${CLANG_DIR}.staging.$$"
-    mkdir -p "$TOOLCHAIN_STAGING" || abort
-    curl --fail --location --retry 3 --output "$TOOLCHAIN_STAGING/clang-r450784d.tar.gz" \
-        "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-13.0.0_r13/clang-r450784d.tar.gz" || abort
-    tar -xf "$TOOLCHAIN_STAGING/clang-r450784d.tar.gz" -C "$TOOLCHAIN_STAGING" || abort
-    [ -x "$TOOLCHAIN_STAGING/bin/clang-14" ] || abort
-    [ -f "$TOOLCHAIN_STAGING/lib64/libc++.so.1" ] || abort
-    rm -f "$TOOLCHAIN_STAGING/clang-r450784d.tar.gz"
-    if [ -d "$CLANG_DIR" ]; then
-        mv "$CLANG_DIR" "${CLANG_DIR}.incomplete.$(date +%Y%m%d%H%M%S)" || abort
-    fi
-    mv "$TOOLCHAIN_STAGING" "$CLANG_DIR" || abort
-fi
+# Keep the original GMKernel compiler revision. Git verifies each fetched
+# object; HTTP-200 Gitiles archives can otherwise be silently truncated.
+bash "$PWD/toolchain/prepare_clang.sh" "$CLANG_DIR" || abort
 
 MAKE_ARGS="
 LLVM=1 \
