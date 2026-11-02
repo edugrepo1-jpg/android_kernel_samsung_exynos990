@@ -5,12 +5,14 @@
 #include <linux/debugfs.h>
 #include <linux/uaccess.h>
 #include <linux/kobject.h>
+#include <linux/mutex.h>
 #include <soc/samsung/cal-if.h>
 
 #include "fvmap.h"
 #include "cmucal.h"
 #include "vclk.h"
 #include "ra.h"
+#include "acpm_dvfs.h"
 
 #define FVMAP_SIZE		(SZ_8K)
 #define STEP_UV			(6250)
@@ -21,6 +23,7 @@ void __iomem *sram_fvmap_base;
 static int init_margin_table[MAX_MARGIN_ID];
 static int volt_offset_percent = 0;
 static int percent_margin_table[MAX_MARGIN_ID];
+static DEFINE_MUTEX(percent_margin_lock);
 
 static int __init get_mif_volt(char *str)
 {
@@ -354,15 +357,15 @@ static int get_vclk_id_from_margin_id(int margin_id)
 static ssize_t show_##type##_percent								\
 (struct kobject *kobj, struct kobj_attribute *attr, char *buf)					\
 {												\
-	return snprintf(buf, PAGE_SIZE, "%d\n", percent_margin_table[margin_id]);		\
+	return snprintf(buf, PAGE_SIZE, "%d\n", READ_ONCE(percent_margin_table[margin_id]));		\
 }												\
 												\
 static ssize_t store_##type##_percent								\
 (struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)		\
 {												\
-	int input, vclk_id;									\
+	int input, vclk_id, ret;									\
 												\
-	if (!sscanf(buf, "%d", &input))								\
+	if (kstrtoint(buf, 10, &input))								\
 		return -EINVAL;									\
 												\
 	if (input < -100 || input > 100)							\
@@ -371,8 +374,15 @@ static ssize_t store_##type##_percent								\
 	vclk_id = get_vclk_id_from_margin_id(margin_id);					\
 	if (vclk_id == -EINVAL)									\
 		return vclk_id;									\
-	percent_margin_table[margin_id] = input;						\
-	cal_dfs_set_volt_margin(vclk_id | ACPM_VCLK_TYPE, input);				\
+	ret = mutex_lock_interruptible(&percent_margin_lock);	\
+	if (ret)	\
+		return ret;	\
+	ret = exynos_acpm_set_volt_margin(vclk_id | ACPM_VCLK_TYPE, input);	\
+	if (!ret)	\
+		WRITE_ONCE(percent_margin_table[margin_id], input);	\
+	mutex_unlock(&percent_margin_lock);	\
+	if (ret)	\
+		return ret < 0 ? ret : -EIO;	\
 												\
 	return count;										\
 }												\
@@ -398,7 +408,19 @@ attr_percent(MARGIN_SCORE, score_margin);
 attr_percent(MARGIN_NPU, npu_margin);
 attr_percent(MARGIN_MFC, mfc_margin);
 
+/* Versioned acknowledgement contract for user-selected Hub margins.
+ * This confirms ACPM transport acceptance, not a measured silicon voltage.
+ */
+static ssize_t gmhub_checked_show(struct kobject *kobj,
+                                struct kobj_attribute *attr, char *buf)
+{
+    return snprintf(buf, PAGE_SIZE, "1\n");
+}
+static struct kobj_attribute gmhub_checked =
+    __ATTR(gmhub_checked, 0444, gmhub_checked_show, NULL);
+
 static struct attribute *percent_margin_attrs[] = {
+	&gmhub_checked.attr,
 	&mif_margin_percent.attr,
 	&int_margin_percent.attr,
 	&big_margin_percent.attr,
@@ -699,3 +721,4 @@ int fvmap_init(void __iomem *sram_base)
 
 	return 0;
 }
+
