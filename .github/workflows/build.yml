@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [cos17-r8s-v3-close-range-20261110]
-    paths: [".github/workflows/build.yml"]
+    paths: ["cos17/**", ".github/workflows/build.yml"]
 permissions:
   contents: read
 concurrency:

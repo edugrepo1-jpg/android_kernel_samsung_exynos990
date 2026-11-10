@@ -5,6 +5,14 @@ cd "$(git rev-parse --show-toplevel)"
 mkdir -p out/cos17-artifacts
 exec > >(tee out/cos17-kernel-build.log) 2>&1
 
+# A shallow CI checkout may not contain the immutable charging baseline.
+# Fetch that exact object explicitly; growing commit history must not break CI.
+BASE_COMMIT=16df24ea7b48eb426fce2ff6b751585cc81a19a4
+if ! git cat-file -e "$BASE_COMMIT^{commit}" 2>/dev/null; then
+    git fetch --no-tags --depth=1 origin "$BASE_COMMIT"
+fi
+test "$(git rev-parse "$BASE_COMMIT^{commit}")" = "$BASE_COMMIT"
+
 test "$(git -C KernelSU-Next rev-parse HEAD)" = c81cdf51c3bb606836c6fc9a7cc858053eb0bc62
 git -C KernelSU-Next apply --check "$PWD/cos17/ksu-sepolicy.patch"
 git -C KernelSU-Next apply "$PWD/cos17/ksu-sepolicy.patch"
