@@ -57,20 +57,8 @@ CORES=`cat /proc/cpuinfo | grep -c processor`
 CLANG_DIR=$PWD/toolchain/clang_14
 PATH=$CLANG_DIR/bin:$PATH
 
-# Check if toolchain exists
-if [ ! -f "$CLANG_DIR/bin/clang-14" ]; then
-    echo "-----------------------------------------------"
-    echo "Toolchain not found! Downloading..."
-    echo "-----------------------------------------------"
-    rm -rf $CLANG_DIR
-    mkdir -p $CLANG_DIR
-    pushd $CLANG_DIR > /dev/null
-    curl -LJOk https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-13.0.0_r13/clang-r450784d.tar.gz
-    tar xf android-13.0.0_r13-clang-r450784d.tar.gz
-    rm android-13.0.0_r13-clang-r450784d.tar.gz
-    echo "Cleaning up..."
-    popd > /dev/null
-fi
+# Fetch the same Clang revision through Git objects; avoid truncated Gitiles tarballs.
+bash "$PWD/toolchain/prepare_clang.sh" "$CLANG_DIR" || abort
 
 MAKE_ARGS="
 LLVM=1 \

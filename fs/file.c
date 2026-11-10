@@ -8,6 +8,7 @@
  */
 
 #include <linux/syscalls.h>
+#include <linux/close_range.h>
 #include <linux/export.h>
 #include <linux/fs.h>
 #include <linux/mm.h>
@@ -637,6 +638,62 @@ out_unlock:
 	return -EBADF;
 }
 EXPORT_SYMBOL(__close_fd); /* for ksys_close() */
+
+/* Mark or close only the selected descriptors, preserving stdio when the
+ * caller starts at fd 3.  A private table isolates UNSHARE from sibling tasks.
+ */
+SYSCALL_DEFINE3(close_range, unsigned int, first, unsigned int, last,
+		unsigned int, flags)
+{
+	struct files_struct *old = current->files;
+	struct files_struct *files = old;
+	struct fdtable *fdt;
+	unsigned int fd, end;
+	int err;
+
+	if (first > last || flags & ~(CLOSE_RANGE_UNSHARE | CLOSE_RANGE_CLOEXEC))
+		return -EINVAL;
+
+	if ((flags & CLOSE_RANGE_UNSHARE) && atomic_read(&old->count) > 1) {
+		files = dup_fd(old, &err);
+		if (!files)
+			return err;
+	}
+
+	spin_lock(&files->file_lock);
+	fdt = files_fdtable(files);
+	end = min(last, fdt->max_fds - 1);
+	if (first <= end && flags & CLOSE_RANGE_CLOEXEC) {
+		bitmap_set(fdt->close_on_exec, first, end - first + 1);
+	} else {
+		for (fd = first; fd <= end; fd++) {
+			struct file *file;
+
+			fd = find_next_bit(fdt->open_fds, end + 1, fd);
+			if (fd > end)
+				break;
+			file = rcu_dereference_raw(fdt->fd[fd]);
+			if (!file)
+				continue;
+			rcu_assign_pointer(fdt->fd[fd], NULL);
+			__put_unused_fd(files, fd);
+			spin_unlock(&files->file_lock);
+			filp_close(file, files);
+			cond_resched();
+			spin_lock(&files->file_lock);
+			fdt = files_fdtable(files);
+		}
+	}
+	spin_unlock(&files->file_lock);
+
+	if (files != old) {
+		task_lock(current);
+		current->files = files;
+		task_unlock(current);
+		put_files_struct(old);
+	}
+	return 0;
+}
 
 void do_close_on_exec(struct files_struct *files)
 {
