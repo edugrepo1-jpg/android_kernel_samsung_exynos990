@@ -1,6 +1,9 @@
 name: Build COS17 r8s V3 kernel
 on:
   workflow_dispatch:
+  push:
+    branches: [cos17-r8s-v3-close-range-20261110]
+    paths: [".github/workflows/build.yml"]
 permissions:
   contents: read
 concurrency:
