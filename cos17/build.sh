@@ -16,6 +16,7 @@ test "$(git rev-parse "$BASE_COMMIT^{commit}")" = "$BASE_COMMIT"
 test "$(git -C KernelSU-Next rev-parse HEAD)" = c81cdf51c3bb606836c6fc9a7cc858053eb0bc62
 git -C KernelSU-Next apply --check "$PWD/cos17/ksu-sepolicy.patch"
 git -C KernelSU-Next apply "$PWD/cos17/ksu-sepolicy.patch"
+python3 cos17/test-manual-hooks.py
 python3 cos17/verify.py source
 bash build.sh -m r8s -k y -r n
 python3 cos17/verify.py output
