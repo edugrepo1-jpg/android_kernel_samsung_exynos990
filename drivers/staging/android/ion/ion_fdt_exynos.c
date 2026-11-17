@@ -20,6 +20,7 @@
 #include <linux/cma.h>
 #include <linux/kmemleak.h>
 #include <linux/memblock.h>
+#include <linux/string.h>
 
 #include "ion.h"
 #include "ion_exynos.h"
@@ -106,6 +107,19 @@ static int __init exynos_ion_reserved_mem_setup(struct reserved_mem *rmem)
 		return -EINVAL;
 	}
 	heapname = (char *)prop;
+
+	/* r8s OEMCrypto allocates a contiguous 6 MiB workspace. Keep the
+	 * existing crypto reservation out of movable CMA pages so the TEE
+	 * client does not depend on a later contiguous-memory migration.
+	 * Other models and every other heap keep their device-tree policy.
+	 */
+	if (IS_ENABLED(CONFIG_MODEL_R8S) && !strcmp(heapname, "crypto_heap")) {
+		reusable = false;
+		recyclable = false;
+		rmem->reusable = false;
+		pr_info("ION: r8s keeps crypto_heap reserved (%pa bytes)\n",
+			&rmem->size);
+	}
 
 	if (reserved_mem_count == ARRAY_SIZE(ion_reserved_mem)) {
 		perrfn("Not enough reserved_mem slot for %s", rmem->name);
